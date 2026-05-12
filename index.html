@@ -295,8 +295,16 @@
     <!-- Slide 5d: Quick win #1 — lifecycle cache duplicate-layer bug -->
     <section data-transition="slide" style="font-size: 0.6em;">
       <h2 style="font-size: 2.1em;">Quick win #1 — lifecycle cache duplicate-layer bug</h2>
-      <p style="font-size: 1em; line-height: 1.4;"><strong style="color: var(--bad);">Problem.</strong> No-op rebuilds (Gemfile.lock unchanged) were still re-uploading all 9 cache layers. The <code>:cache</code> manifest had grown to <strong>18 entries pointing at only 9 unique blobs</strong> — each blob duplicated. ~80 s wasted per build.</p>
-      <p style="font-size: 1em; line-height: 1.4;"><strong style="color: var(--accent);">Cause.</strong> Fall-through in <code>neeto-deploy-lifecycle/phase/cache.go</code>: when the SHA matched, <code>ReuseLayer()</code> ran correctly, but the code then ALSO ran <code>AddLayerFile()</code>:</p>
+      <p style="font-size: 1em; line-height: 1.4;">
+        <strong style="color: var(--bad);">Problem.</strong>
+        When a developer deploys an app without changing any dependencies, the build pipeline should <em>reuse</em> the cached gem and asset layers from the previous build — not re-upload them. But every build, even ones where the only change was app code, was pushing all 9 cache layers to ECR again.
+      </p>
+      <p style="font-size: 1em; line-height: 1.4;">
+        Inspecting the actual <code>:cache</code> image revealed why this was so expensive: its manifest listed <strong>18 layer references</strong>, but only <strong>9 unique data blobs</strong> existed — <strong>every blob was being uploaded twice</strong>. Net cost: ~80 s of duplicate network transfer per build, plus the cache image grew unnecessarily.
+      </p>
+      <p style="font-size: 1em; line-height: 1.4;">
+        <strong style="color: var(--accent);">Cause.</strong> A missing <code>return</code> in <code>neeto-deploy-lifecycle/phase/cache.go</code>. When the SHA matched (reuse path), <code>ReuseLayer()</code> ran correctly — but execution then fell through and also called <code>AddLayerFile()</code>, re-uploading the same blob:
+      </p>
       <pre style="font-size: 0.7em;"><code class="language-go">if layer.Digest == previousSHA {
     if err = cache.VerifyLayer(previousSHA); err == nil {
         if err = cache.ReuseLayer(previousSHA); err != nil { /* handle */ }
@@ -305,23 +313,31 @@
 }
 return layer.Digest, cache.AddLayerFile(layer.TarPath, layer.Digest)  // still runs</code></pre>
       <p class="fragment fade-up" style="font-size: 1em; line-height: 1.4; margin-top: 0.4em;">
-        <strong style="color: var(--accent);">Fix.</strong> One-line <code>return layer.Digest, nil</code> after successful <code>ReuseLayer</code>. <strong>cache_add 9 → 0</strong> on warm rebuilds; EXPORT <strong>453 s → 371 s (−80 s/build)</strong>.
+        <strong style="color: var(--accent);">Fix.</strong> One-line <code>return layer.Digest, nil</code> after successful <code>ReuseLayer</code>. Result: <strong>cache_add 9 → 0</strong> on warm rebuilds; EXPORT phase <strong>453 s → 371 s (−80 s/build)</strong>.
       </p>
-      <p style="font-size: 0.75em; color: var(--dim); margin-top: 0.5em; font-style: italic;">PR (merged): <a href="https://github.com/neetozone/neeto-deploy-lifecycle/pull/2" target="_blank"><code>neeto-deploy-lifecycle#2</code></a> · Released as <code>lifecycle:0.2</code></p>
+      <p style="font-size: 0.75em; color: var(--dim); margin-top: 0.4em; font-style: italic;">PR (merged): <a href="https://github.com/neetozone/neeto-deploy-lifecycle/pull/2" target="_blank"><code>neeto-deploy-lifecycle#2</code></a> · Released as <code>lifecycle:0.2</code></p>
     </section>
 
     <!-- Slide 5e: Quick win #2 — --previous-image launch reuse -->
     <section data-transition="slide" style="font-size: 0.6em;">
       <h2 style="font-size: 2.1em;">Quick win #2 — <code style="font-size: 0.85em;">--previous-image</code> launch reuse</h2>
-      <p style="font-size: 1em; line-height: 1.4;"><strong style="color: var(--bad);">Problem.</strong> pack had no knowledge of the previously-deployed app image. Every build re-tarred + re-uploaded the <strong>launcher, config, process-types</strong> launch layers — bytes unchanged for months. Logs spammed <code>Adding layer 'buildpacksio/lifecycle:launcher'</code> every build.</p>
-      <p style="font-size: 1em; line-height: 1.4;"><strong style="color: var(--accent);">Fix.</strong> In <code>neeto-deploy-slug-compiler-web/.docker/pack-build/build.sh</code>: pre-fetch <code>:latest</code> via <code>aws ecr describe-images</code>, pass it to <code>pack build</code>:</p>
+      <p style="font-size: 1em; line-height: 1.4;">
+        <strong style="color: var(--bad);">Problem.</strong>
+        Every build's EXPORT phase tars + gzips + uploads each layer of the app image to ECR. Some of those layers — <strong>launcher, config, process-types</strong> — come from the CNB lifecycle itself and only change when we bump the lifecycle version (months apart).
+      </p>
+      <p style="font-size: 1em; line-height: 1.4;">
+        But pack had no way to look at the previous build's app image. So it treated every layer as new, re-uploading bytes that were byte-for-byte identical to last week's build. Every build's logs were spammed with <code>Adding layer 'buildpacksio/lifecycle:launcher'</code> when they could have been <code>Reusing layer …</code>.
+      </p>
+      <p style="font-size: 1em; line-height: 1.4;">
+        <strong style="color: var(--accent);">Fix.</strong> In <code>neeto-deploy-slug-compiler-web/.docker/pack-build/build.sh</code>: look up <code>:latest</code> via <code>aws ecr describe-images</code>, then pass it to <code>pack build</code> as <code>--previous-image</code>:
+      </p>
       <pre style="font-size: 0.7em;"><code class="language-bash">if aws ecr describe-images --repository-name "$APP_IMAGE_REPOSITORY" \
      --image-ids imageTag=latest --region us-east-1 > /dev/null 2>&1; then
   previous_image_args=('--previous-image' "$LATEST_IMAGE_TAG")
 fi
 pack build "$APP_IMAGE_TAG" "${previous_image_args[@]}" --tag "$LATEST_IMAGE_TAG" …</code></pre>
       <p class="fragment fade-up" style="font-size: 1em; line-height: 1.4; margin-top: 0.4em;">
-        <strong style="color: var(--accent);">Effect.</strong> Exporter compares each new layer's SHA against the previous image's manifest. Same SHA → reference the blob by digest, <strong>skip the upload</strong>. Logs now read <code>Reusing layer …</code> instead of <code>Adding layer …</code> — the foundation <code>bundle-install:0.9.0</code> later compounded on top of.
+        <strong style="color: var(--accent);">Effect.</strong> The exporter now compares each new layer's SHA against the previous image's manifest. Same SHA → reference the existing blob by digest, <strong>skip the upload entirely</strong>. Logs flip from <code>Adding layer …</code> to <code>Reusing layer …</code>.
       </p>
     </section>
 
