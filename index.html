@@ -382,7 +382,11 @@ if environment.BundleWithout != "" {
       <p class="fragment fade-up" style="margin-top: 0.5em;">
         <strong>Defaults preserve back-compat.</strong> Apps with <code>RAILS_ENV=production</code> (i.e., every neeto product) automatically get the savings.
       </p>
-      <p class="footnote">PR: <code>neetozone/neeto-deploy-paketo-bundle-install-buildpack#12</code> · ECR: <code>bundle-install:0.9.0</code> · 11 new tests, 0 regressions</p>
+      <p class="footnote">
+        PR (merged): <a href="https://github.com/neetozone/neeto-deploy-paketo-bundle-install-buildpack/pull/12" target="_blank"><code>neeto-deploy-paketo-bundle-install-buildpack#12</code></a>
+        · Tracking issue: <a href="https://github.com/neetozone/neeto-deploy-web/issues/7146" target="_blank"><code>neeto-deploy-web#7146</code></a>
+        · 11 new tests, 0 regressions
+      </p>
     </section>
 
     <!-- Slide 9: Results - Cache Reduction Chart -->
@@ -479,13 +483,14 @@ if environment.BundleWithout != "" {
       <div style="display: grid; grid-template-columns: 1fr; gap: 0.3em; font-size: 0.55em; line-height: 1.4;">
         <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>Per-phase instrumentation</strong> — <code>[Build][phase=…][duration_ms=…]</code> log lines, foundation for everything else</div>
         <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong><code>--previous-image</code> launch reuse</strong> — exporter references existing app-image blobs by digest</div>
-        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>lifecycle:0.2</strong> — fixed missing <code>return</code> in <code>addOrReuseCacheLayer</code> (duplicate manifest entries bug)</div>
-        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>lifecycle:0.3</strong> — 6 SBOM placeholder files, eliminates exporter warnings</div>
-        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>slug-compiler PR #316</strong> — removed no-op <code>--trust-builder</code>, bumped lifecycle ref to 0.3</div>
-        <div class="fragment fade-up" style="border-left: 3px solid var(--accent2); padding-left: 0.5em;"><span class="pill shipped">FLAGSHIP</span> <strong>bundle-install:0.9.0</strong> — env-aware <code>--without</code> on both build and launch layers. THE big lever.</div>
+        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>lifecycle:0.2</strong> — <a href="https://github.com/neetozone/neeto-deploy-lifecycle/pull/2" target="_blank">PR #2</a>: fixed missing <code>return</code> in <code>addOrReuseCacheLayer</code> (duplicate manifest entries bug)</div>
+        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>lifecycle:0.3</strong> — <a href="https://github.com/neetozone/neeto-deploy-lifecycle/pull/4" target="_blank">PR #4</a>: 6 SBOM placeholder files, eliminates exporter warnings</div>
+        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>slug-compiler</strong> — <a href="https://github.com/neetozone/neeto-deploy-slug-compiler-web/pull/316" target="_blank">PR #316</a>: removed no-op <code>--trust-builder</code>, bumped lifecycle ref to 0.3</div>
+        <div class="fragment fade-up" style="border-left: 3px solid var(--accent2); padding-left: 0.5em;"><span class="pill shipped">FLAGSHIP</span> <strong>bundle-install:0.9.0</strong> — <a href="https://github.com/neetozone/neeto-deploy-paketo-bundle-install-buildpack/pull/12" target="_blank">PR #12</a>: env-aware <code>--without</code> on both build and launch layers. THE big lever.</div>
         <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>ruby:0.47.21 composite</strong> — references bundle-install:0.9.0, propagates fix to every Ruby app</div>
         <div class="fragment fade-up"><span class="pill shipped">OPS</span> <strong>Fleet-wide tag clear</strong> — 250 :cache + 118 prod/staging :latest deleted, forcing fresh clean rebuilds</div>
       </div>
+      <p class="footnote">Tracking issue: <a href="https://github.com/neetozone/neeto-deploy-web/issues/7146" target="_blank"><code>neeto-deploy-web#7146</code></a></p>
     </section>
 
     <!-- Slide 14: Honest evaluation -->
@@ -525,10 +530,15 @@ if environment.BundleWithout != "" {
 │
 └── neeto-deploy/paketo/buildpack/ruby:0.47.21
     └── multi-arch   sha256:fffc12…   (composite — pulls bundle-install:0.9.0)</code></pre>
-      <p style="font-size: 0.7em; margin-top: 1em;">
-        Plus tracking issue: <code>neetozone/neeto-deploy-web#7146</code><br>
-        Plus PR: <code>neetozone/neeto-deploy-paketo-bundle-install-buildpack#12</code>
-      </p>
+      <div style="margin-top: 0.6em; font-size: 0.5em; line-height: 1.6;">
+        <strong style="color: var(--accent);">PRs (all merged):</strong><br>
+        · <a href="https://github.com/neetozone/neeto-deploy-paketo-bundle-install-buildpack/pull/12" target="_blank">neeto-deploy-paketo-bundle-install-buildpack #12</a> — env-aware <code>--without</code> (flagship)<br>
+        · <a href="https://github.com/neetozone/neeto-deploy-slug-compiler-web/pull/316" target="_blank">neeto-deploy-slug-compiler-web #316</a> — remove <code>--trust-builder</code>, bump lifecycle<br>
+        · <a href="https://github.com/neetozone/neeto-deploy-lifecycle/pull/4" target="_blank">neeto-deploy-lifecycle #4</a> — SBOM placeholder files (0.3)<br>
+        · <a href="https://github.com/neetozone/neeto-deploy-lifecycle/pull/2" target="_blank">neeto-deploy-lifecycle #2</a> — cache duplicate-layer fix (0.2)<br>
+        <strong style="color: var(--accent);">Tracking issue:</strong>
+        <a href="https://github.com/neetozone/neeto-deploy-web/issues/7146" target="_blank">neeto-deploy-web #7146</a>
+      </div>
     </section>
 
     <!-- Slide 16: Numbers card -->
@@ -568,9 +578,13 @@ if environment.BundleWithout != "" {
     <section data-transition="fade" style="text-align: center;">
       <h1 style="font-size: 3em;">Thanks 🙌</h1>
       <p style="font-size: 0.9em; color: var(--accent); margin-top: 0.8em;">Questions?</p>
-      <p style="font-size: 0.55em; color: #9ca3af; margin-top: 2em;">
-        Detailed report: <code>pack-build-optimization-results.md</code><br>
-        Gist: <code>gist.github.com/vishal24367/e06ad01da4c455216e9833920135094a</code>
+      <p style="font-size: 0.55em; color: #9ca3af; margin-top: 2em; line-height: 1.7;">
+        Detailed report:
+        <a href="https://gist.github.com/vishal24367/e06ad01da4c455216e9833920135094a#file-pack-build-optimization-results-md" target="_blank">pack-build-optimization-results.md</a><br>
+        Deck source:
+        <a href="https://github.com/vishal24367/pack-build-optimization-deck" target="_blank">github.com/vishal24367/pack-build-optimization-deck</a><br>
+        Gist:
+        <a href="https://gist.github.com/vishal24367/e06ad01da4c455216e9833920135094a" target="_blank">gist.github.com/vishal24367/e06ad…</a>
       </p>
     </section>
 
