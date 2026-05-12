@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Pack Build Optimization — Results</title>
+  <meta name="viewport" content="width=1024, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+
+  <style>
+    :root {
+      --accent: #7df9c0;
+      --accent2: #ffb86c;
+      --bad: #ff6e6e;
+      --good: #7df9c0;
+      --dim: #6b7280;
+      --bg: #0a0f1c;
+      --card: #131a2e;
+    }
+    .reveal { background: var(--bg); }
+    .reveal .slides section { text-align: left; overflow: hidden; box-sizing: border-box; }
+    .reveal .slides { width: 100%; height: 100%; }
+    .reveal h1, .reveal h2, .reveal h3 { color: #fff; text-transform: none; letter-spacing: -0.02em; margin: 0 0 0.4em; }
+    .reveal h1 { font-size: 1.9em; font-weight: 700; }
+    .reveal h2 { font-size: 1.3em; font-weight: 600; }
+    .reveal h3 { font-size: 1em; font-weight: 500; color: var(--accent); }
+    .reveal p, .reveal li { color: #d1d5db; font-size: 0.7em; line-height: 1.4; }
+    .reveal a { color: var(--accent); }
+    .reveal pre { box-shadow: none; margin: 0.4em 0; }
+    .reveal table { font-size: 0.55em; width: 100%; border-collapse: collapse; }
+    .reveal th, .reveal td { padding: 0.3em 0.6em; border-bottom: 1px solid #2a334d; }
+    .reveal th { color: var(--accent); font-weight: 600; text-align: left; }
+    .reveal .num-good { color: var(--good); font-weight: 700; }
+    .reveal .num-bad { color: var(--bad); font-weight: 700; }
+    .reveal .num-dim { color: var(--dim); }
+
+    .big-num {
+      font-size: 3.2em;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      color: var(--accent);
+      font-feature-settings: "tnum";
+    }
+    .big-num .unit { font-size: 0.45em; opacity: 0.7; margin-left: 0.1em; }
+    .big-num .delta { font-size: 0.35em; color: var(--accent2); display: block; margin-top: 0.2em; letter-spacing: 0; }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.7em;
+      margin-top: 0.5em;
+    }
+    .stat-card {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 0.7em 0.9em;
+      border-left: 3px solid var(--accent);
+    }
+    .stat-card .label { font-size: 0.55em; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.1em; }
+    .stat-card .val { font-size: 1.25em; font-weight: 700; color: #fff; line-height: 1.15; margin-top: 0.15em; }
+    .stat-card .sub { font-size: 0.55em; color: var(--accent2); margin-top: 0.2em; }
+
+    .layer-bar {
+      display: flex;
+      height: 38px;
+      border-radius: 5px;
+      overflow: hidden;
+      margin: 0.3em 0 0.1em;
+      box-shadow: 0 0 0 1px #2a334d;
+    }
+    .layer-bar .seg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.55em;
+      font-weight: 600;
+      color: rgba(0,0,0,0.85);
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .layer-bar .label-out {
+      text-align: right;
+      font-size: 0.5em;
+      color: #9ca3af;
+      margin-top: 0.1em;
+    }
+
+    .phase-row { display: grid; grid-template-columns: 130px 1fr 110px; gap: 6px; align-items: center; margin: 2px 0; font-size: 0.55em; }
+    .phase-bar-wrap { background: #1f2937; border-radius: 3px; height: 16px; position: relative; }
+    .phase-bar { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent2), var(--bad)); transition: width 1.2s cubic-bezier(.2,.7,.3,1); }
+    .phase-bar.after { background: linear-gradient(90deg, var(--accent), #4ade80); }
+
+    .pill {
+      display: inline-block;
+      padding: 0.1em 0.5em;
+      border-radius: 999px;
+      font-size: 0.5em;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      vertical-align: middle;
+    }
+    .pill.shipped { background: rgba(125,249,192,0.15); color: var(--accent); border: 1px solid var(--accent); }
+    .pill.skipped { background: rgba(107,114,128,0.2); color: #9ca3af; border: 1px solid #4b5563; }
+    .pill.wrong { background: rgba(255,110,110,0.15); color: var(--bad); border: 1px solid var(--bad); }
+
+    .footnote { font-size: 0.45em; color: var(--dim); margin-top: 0.6em; font-style: italic; }
+    code { color: var(--accent2) !important; background: rgba(255,184,108,0.08) !important; padding: 0.1em 0.35em; border-radius: 3px; }
+    .reveal pre code { background: #161b22 !important; color: #c9d1d9 !important; }
+    canvas { max-width: 100%; max-height: 360px !important; height: 360px !important; }
+    .chart-wrap { position: relative; width: 100%; height: 360px; margin-top: 0.4em; }
+    .chart-wrap.small { height: 280px; }
+    .chart-wrap.small canvas { max-height: 280px !important; height: 280px !important; }
+    .legend { display: flex; gap: 1em; font-size: 0.55em; margin-top: 0.4em; }
+    .legend-item { display: flex; align-items: center; gap: 0.3em; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+<div class="reveal">
+  <div class="slides">
+
+    <!-- Slide 1: Title -->
+    <section data-transition="zoom" style="text-align: center;">
+      <h1 style="font-size: 2.4em; margin-bottom: 0.2em;">Pack Build Optimization</h1>
+      <p style="font-size: 1em; color: var(--accent); margin: 0.3em 0;">
+        29% faster builds &nbsp;·&nbsp; 84% smaller cache &nbsp;·&nbsp; fleet-wide
+      </p>
+      <p style="font-size: 0.55em; color: #9ca3af; margin-top: 1.5em;">
+        neeto-deploy &nbsp;·&nbsp; May 2026
+      </p>
+      <p class="footnote" style="margin-top: 2em;">Press <kbd>→</kbd> to advance &nbsp;·&nbsp; <kbd>F</kbd> for fullscreen &nbsp;·&nbsp; <kbd>ESC</kbd> for overview</p>
+    </section>
+
+    <!-- Slide 2: TL;DR -->
+    <section data-transition="fade">
+      <h2>TL;DR</h2>
+      <div class="stat-grid">
+        <div class="stat-card fragment fade-up">
+          <div class="label">Build time (warm)</div>
+          <div class="val">668s → <span style="color: var(--accent);">473s</span></div>
+          <div class="sub">−195s &nbsp;·&nbsp; −29%</div>
+        </div>
+        <div class="stat-card fragment fade-up">
+          <div class="label">Export phase</div>
+          <div class="val">371s → <span style="color: var(--accent);">235s</span></div>
+          <div class="sub">−136s &nbsp;·&nbsp; −37%</div>
+        </div>
+        <div class="stat-card fragment fade-up">
+          <div class="label">:cache ECR image</div>
+          <div class="val">3,236 MB → <span style="color: var(--accent);">531 MB</span></div>
+          <div class="sub">−2,705 MB &nbsp;·&nbsp; −84%</div>
+        </div>
+        <div class="stat-card fragment fade-up">
+          <div class="label">build-gems layer</div>
+          <div class="val">2,652 MB → <span style="color: var(--accent);">125 MB</span></div>
+          <div class="sub">−2,527 MB &nbsp;·&nbsp; −95%</div>
+        </div>
+      </div>
+      <p class="footnote">Measured on neeto-planner-web-staging (representative Rails monorepo). Source: ClickHouse <code>logs.app_logs</code> + ECR manifest inspection.</p>
+    </section>
+
+    <!-- Slide 3: The Problem -->
+    <section data-transition="slide">
+      <h2>The Problem</h2>
+      <p>1,854 pack builds in 7 days hit the EKS arm-builds nodes:</p>
+      <table>
+        <tr><th>Percentile</th><th>Duration</th><th>What you felt</th></tr>
+        <tr><td>p50</td><td>624 s (10.4 min)</td><td>average wait per deploy</td></tr>
+        <tr><td>p90</td><td>905 s (15.1 min)</td><td>slow deploys</td></tr>
+        <tr><td>p95</td><td>961 s (16.0 min)</td><td>painful</td></tr>
+        <tr><td class="num-bad">p99</td><td class="num-bad">1,403 s (23.4 min)</td><td class="num-bad">brutal</td></tr>
+        <tr><td class="num-bad">max</td><td class="num-bad">1,895 s (31.6 min)</td><td class="num-bad">hit the timeout zone</td></tr>
+      </table>
+      <p class="fragment fade-up" style="margin-top: 1.5em; font-size: 0.9em;">
+        <strong style="color: var(--bad);">EXPORT phase</strong> was the dominant cost — averaging <strong>~370 s</strong> per build with no obvious cause from the surface.
+      </p>
+    </section>
+
+    <!-- Slide 4: The Build Pipeline -->
+    <section data-transition="slide">
+      <h2>Pack Build — 5 lifecycle phases</h2>
+      <div style="font-family: monospace; font-size: 0.6em; line-height: 1.7; margin-top: 0.5em;">
+        <div class="fragment fade-right">
+          <span style="color: #9ca3af;">1.</span>
+          <span style="color: #60a5fa;">ANALYZE</span>
+          <span style="color: #6b7280;"> — pull previous-image manifest, decide which layers to reuse</span>
+        </div>
+        <div class="fragment fade-right">
+          <span style="color: #9ca3af;">2.</span>
+          <span style="color: #60a5fa;">DETECT</span>
+          <span style="color: #6b7280;"> — each buildpack votes "I apply"</span>
+        </div>
+        <div class="fragment fade-right">
+          <span style="color: #9ca3af;">3.</span>
+          <span style="color: #60a5fa;">RESTORE</span>
+          <span style="color: #6b7280;"> — pull :cache, untar layers into build container</span>
+        </div>
+        <div class="fragment fade-right">
+          <span style="color: #9ca3af;">4.</span>
+          <span style="color: #60a5fa;">BUILD</span>
+          <span style="color: #6b7280;"> — each buildpack's bin/build runs (bundle install, assets:precompile, …)</span>
+        </div>
+        <div class="fragment fade-right">
+          <span style="color: var(--bad);">5.</span>
+          <span style="color: var(--bad);">EXPORT  ← dominant cost</span>
+          <span style="color: #6b7280;"> — walk dirs, tar, gzip, SHA256, push to ECR</span>
+        </div>
+      </div>
+      <p class="fragment fade-up" style="margin-top: 0.8em;">
+        For every layer: <code>tar(dir) → gzip → sha256 → upload-or-reuse</code>.
+        Layer size drives the wall-clock cost.
+      </p>
+    </section>
+
+    <!-- Slide 5: Phase Breakdown Chart -->
+    <section data-transition="slide">
+      <h2>Where time was actually going</h2>
+      <p style="font-size: 0.75em;">Per-phase duration from the <strong>before</strong> baseline (deployment <code>7fdc4f7c</code>):</p>
+      <div style="margin-top: 1em;">
+        <div class="phase-row"><span>setup_env</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 1.3%;"></div></div><span>4.7s</span></div>
+        <div class="phase-row"><span>clone_repo</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 0.3%;"></div></div><span>1.1s</span></div>
+        <div class="phase-row"><span>analyzing</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 11.5%;"></div></div><span>42.7s</span></div>
+        <div class="phase-row"><span>detecting</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 0.5%;"></div></div><span>1.8s</span></div>
+        <div class="phase-row"><span>restoring</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 16%;"></div></div><span>59.5s</span></div>
+        <div class="phase-row"><span>building</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 36.2%;"></div></div><span>134.5s</span></div>
+        <div class="phase-row"><span style="color: var(--bad); font-weight: 700;">exporting</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 100%;"></div></div><span style="color: var(--bad); font-weight: 700;">371.0s</span></div>
+      </div>
+      <p class="fragment fade-up" style="margin-top: 1em; font-size: 0.85em;">
+        <strong>EXPORT alone = 56% of total build time.</strong> So we needed to know what was happening inside it.
+      </p>
+    </section>
+
+    <!-- Slide 5b: Two layers per build -->
+    <section data-transition="slide">
+      <h2>Bundle-install creates <em>two</em> layers per build</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em; margin-top: 0.5em;">
+        <div class="stat-card fragment fade-right" style="border-left-color: #f97316;">
+          <div class="label" style="color: #f97316;">build-gems</div>
+          <table style="font-size: 0.5em; margin-top: 0.4em;">
+            <tr><td>flags</td><td><code>build:true cache:true</code></td></tr>
+            <tr><td>lives in</td><td><code>&lt;app&gt;:cache</code> ECR image</td></tr>
+            <tr><td>used during</td><td>build phase only</td></tr>
+            <tr><td>contents</td><td><strong>all gems</strong> incl. dev/test</td></tr>
+            <tr><td>purpose</td><td>speed up future <code>bundle install</code></td></tr>
+          </table>
+        </div>
+        <div class="stat-card fragment fade-left" style="border-left-color: #7df9c0;">
+          <div class="label" style="color: #7df9c0;">launch-gems</div>
+          <table style="font-size: 0.5em; margin-top: 0.4em;">
+            <tr><td>flags</td><td><code>launch:true</code></td></tr>
+            <tr><td>lives in</td><td><code>&lt;app&gt;:&lt;deploy-id&gt;</code> app image</td></tr>
+            <tr><td>used during</td><td>runtime (in the running pod)</td></tr>
+            <tr><td>contents</td><td>only <code>:default + :production</code></td></tr>
+            <tr><td>purpose</td><td>what the app actually loads</td></tr>
+          </table>
+        </div>
+      </div>
+      <p class="fragment fade-up" style="margin-top: 0.6em;">
+        Critical detail: launch-gems is created by <strong>copying build-gems</strong>, then running
+        <code>bundle install --without development:test --clean true</code> to strip the dev/test gems out.
+      </p>
+    </section>
+
+    <!-- Slide 5c: How the cache flows -->
+    <section data-transition="slide">
+      <h2>How the cache flows across builds</h2>
+      <div style="display: grid; grid-template-columns: 1fr; gap: 0.5em; font-size: 0.55em; margin-top: 0.4em;">
+        <div class="fragment fade-up" style="display: grid; grid-template-columns: 90px 1fr; gap: 1em; align-items: start;">
+          <div style="color: var(--accent2); font-weight: 700;">Build 1<br><span style="font-size: 0.7em; color: var(--dim); font-weight: 400;">(cold)</span></div>
+          <div>
+            <strong>RESTORE:</strong> no <code>:cache</code> exists → no-op<br>
+            <strong>BUILD:</strong> <code>bundle install</code> (no <code>--without</code>) → installs <strong>every gem</strong> into <code>build-gems</code><br>
+            <strong>EXPORT:</strong> push fresh <code>:cache</code> with build-gems blob. Push <code>:latest</code> with launch-gems.
+          </div>
+        </div>
+        <div class="fragment fade-up" style="display: grid; grid-template-columns: 90px 1fr; gap: 1em; align-items: start;">
+          <div style="color: var(--accent); font-weight: 700;">Build 2+<br><span style="font-size: 0.7em; color: var(--dim); font-weight: 400;">(warm)</span></div>
+          <div>
+            <strong>RESTORE:</strong> pull <code>:cache</code> → untar build-gems into the build container<br>
+            <strong>BUILD:</strong> buildpack reads <code>cache_sha</code> metadata. If <code>Gemfile.lock</code> unchanged → <code>"Reusing cached layer"</code> → <em>install is skipped entirely</em><br>
+            <strong>EXPORT:</strong> re-tar + gzip + hash the same build-gems content → push same <code>:cache</code>
+          </div>
+        </div>
+        <div class="fragment fade-up" style="padding: 0.5em 0.8em; background: rgba(239,68,68,0.1); border-left: 3px solid var(--bad); border-radius: 4px;">
+          <strong style="color: var(--bad);">Consequence:</strong> build-gems content is <strong>frozen from Build 1</strong>. Whatever leaked in on day one (dev/test gems, old wkhtmltopdf-binary versions) gets dragged forward forever — and re-hashed every export.
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 6: Investigation -->
+    <section data-transition="zoom">
+      <h2>Investigation — the smoking gun</h2>
+      <p>Pulled the <code>:cache</code> ECR image, aggregated uncompressed bytes by category:</p>
+
+      <table style="margin-top: 0.4em; font-size: 0.5em;">
+        <tr><th>Category</th><th style="text-align: right;">Size (MB)</th><th style="text-align: right;">% of cache</th></tr>
+        <tr style="color: #ef4444;"><td><code>wkhtmltopdf-binary</code> (in <code>:development, :test</code> group)</td><td style="text-align: right;">1,134</td><td style="text-align: right;">35%</td></tr>
+        <tr><td>Other production gems</td><td style="text-align: right;">300</td><td style="text-align: right;">9%</td></tr>
+        <tr style="color: #f97316;"><td>Dev/test gems (brakeman, faker, rbs, …)</td><td style="text-align: right;">152</td><td style="text-align: right;">5%</td></tr>
+        <tr style="color: #eab308;"><td>Duplicate gem versions</td><td style="text-align: right;">120</td><td style="text-align: right;">4%</td></tr>
+        <tr><td>Native ext sources + bundler cache</td><td style="text-align: right;">1,338</td><td style="text-align: right;">41%</td></tr>
+        <tr><td>Misc</td><td style="text-align: right;">216</td><td style="text-align: right;">6%</td></tr>
+        <tr style="font-weight: 700;"><td>Total</td><td style="text-align: right;">3,236</td><td style="text-align: right;">100%</td></tr>
+      </table>
+
+      <div class="fragment fade-up" style="margin-top: 0.6em; padding: 0.5em 0.8em; background: rgba(255,110,110,0.1); border-left: 3px solid var(--bad); border-radius: 4px; font-size: 0.6em;">
+        <strong style="color: var(--bad);">Finding:</strong> 1.13 GB of <code>wkhtmltopdf-binary</code> in the cache — that gem is in <code>:development, :test</code> group of <code>Gemfile.common.rb</code>. It should NEVER ship to production. Yet there it was, in every neeto product's build-gems cache.
+      </div>
+    </section>
+
+    <!-- Slide 7: Root Cause -->
+    <section data-transition="slide">
+      <h2>Root cause</h2>
+      <p>Upstream Paketo <code>bundle-install</code> in <code>build.go</code> — asymmetric configs:</p>
+      <pre style="font-size: 0.42em;"><code class="language-go">// BUILD layer install
+installProcess.Execute(..., map[string]string{
+    "path":  layer.Path,
+    "clean": "true",
+    // ← NO "without". Installs every group.
+})
+
+// LAUNCH layer install
+installProcess.Execute(..., map[string]string{
+    "path":    layer.Path,
+    "without": "development:test",  // ← hardcoded, launch only
+    "clean":   "true",
+})</code></pre>
+      <p class="fragment fade-up" style="margin-top: 0.5em;">
+        First build (no cache) → <code>build-gems</code> gets <strong>all gems</strong>.
+        Subsequent builds "Reuse cached layer" without re-installing → dev/test gems live in the cache <strong>forever</strong>.
+      </p>
+      <p class="fragment fade-up" style="margin-top: 0.4em;">
+        Launch image was fine. But the cache layer still had to be tarred + gzipped + hashed every export — <strong>~85 s of wasted work per build</strong>.
+      </p>
+    </section>
+
+    <!-- Slide 7b: Why production images bloated too -->
+    <section data-transition="slide">
+      <h2>And the bloat reached production app images</h2>
+      <p>Even though launch install runs <code>bundle install --without development:test --clean true</code>:</p>
+      <ol style="font-size: 0.6em; line-height: 1.6; margin-top: 0.4em;">
+        <li class="fragment fade-up">
+          Launch-gems starts as a <strong>copy of build-gems</strong> (which has dev/test).
+        </li>
+        <li class="fragment fade-up">
+          Pack's <code>--previous-image</code> optimization tells the exporter:
+          <em>"if this layer's SHA matches the previous build's, reference that blob — don't re-upload"</em>.
+        </li>
+        <li class="fragment fade-up">
+          When <code>Gemfile.lock</code> doesn't change, the buildpack logs <code>"Reusing cached layer …/launch-gems"</code> → exporter re-uses the <strong>same SHA</strong> from the previous build's manifest.
+        </li>
+        <li class="fragment fade-up">
+          Result: the <strong>polluted launch-gems blob</strong> created on the very first build is referenced by every subsequent app image. The 2.5+ GB launch-gems persists in production indefinitely.
+        </li>
+      </ol>
+      <div class="fragment fade-up" style="margin-top: 0.5em; padding: 0.5em 0.8em; background: rgba(125,249,192,0.08); border-left: 3px solid var(--accent); border-radius: 4px; font-size: 0.6em;">
+        <strong style="color: var(--accent);">Fleet audit found:</strong> 3 production app images at 2.5–2.8 GB each. After <code>:latest</code> + <code>:cache</code> delete + 1 cold rebuild → 700–900 MB each (<strong>−69%</strong>).
+      </div>
+    </section>
+
+    <!-- Slide 8: The Fix -->
+    <section data-transition="slide">
+      <h2>The fix — <code style="font-size: 0.85em;">bundle-install:0.9.0</code></h2>
+      <p>Added <code>BP_BUNDLE_WITHOUT</code> env var (+ <code>RAILS_ENV</code>/<code>RACK_ENV</code>-derived default) honored by <strong>both</strong> layer installs:</p>
+      <pre style="font-size: 0.42em;"><code class="language-go">// environment.go
+switch railsEnv {
+case "production", "staging": return "development:test"
+case "development":           return "production:test:staging:heroku"
+case "test":                  return "production:development:staging:heroku"
+default:                      return ""           // legacy
+}
+
+// build.go — same logic now applied to BOTH layers
+if environment.BundleWithout != "" {
+    buildConfig["without"] = environment.BundleWithout
+}</code></pre>
+      <p class="fragment fade-up" style="margin-top: 0.5em;">
+        <strong>Defaults preserve back-compat.</strong> Apps with <code>RAILS_ENV=production</code> (i.e., every neeto product) automatically get the savings.
+      </p>
+      <p class="footnote">PR: <code>neetozone/neeto-deploy-paketo-bundle-install-buildpack#12</code> · ECR: <code>bundle-install:0.9.0</code> · 11 new tests, 0 regressions</p>
+    </section>
+
+    <!-- Slide 9: Results - Cache Reduction Chart -->
+    <section data-transition="slide">
+      <h2>Result #1 — cache image size</h2>
+      <div class="chart-wrap small"><canvas id="cacheChart"></canvas></div>
+      <div class="legend" style="justify-content: center;">
+        <div class="legend-item"><div class="legend-dot" style="background: #ef4444;"></div>Before (3,236 MB)</div>
+        <div class="legend-item"><div class="legend-dot" style="background: #7df9c0;"></div>After (531 MB)</div>
+      </div>
+      <p class="fragment fade-up" style="margin-top: 0.5em; text-align: center;">
+        Layer 5 (<code>build-gems</code>) dropped from <span class="num-bad">2,652 MB</span> → <span class="num-good">125 MB</span>. All other layers unchanged.
+      </p>
+    </section>
+
+    <!-- Slide 10: Results - Phase Times -->
+    <section data-transition="slide">
+      <h2>Result #2 — per-phase timing</h2>
+      <div style="margin-top: 1em;">
+        <div style="display: grid; grid-template-columns: 130px 1fr 1fr; gap: 6px; font-size: 0.6em; color: var(--dim); margin-bottom: 4px;">
+          <span></span><span>BEFORE</span><span>AFTER (warm)</span>
+        </div>
+        <div class="phase-row"><span>setup_env</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 1.3%;"></div></div><span>4.6s</span></div>
+        <div class="phase-row"><span></span><div class="phase-bar-wrap"><div class="phase-bar after" style="width: 1.2%;"></div></div><span class="num-good">4.6s</span></div>
+
+        <div class="phase-row"><span>analyzing</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 11.5%;"></div></div><span>42.7s</span></div>
+        <div class="phase-row"><span></span><div class="phase-bar-wrap"><div class="phase-bar after" style="width: 11.5%;"></div></div><span class="num-good">42.7s</span></div>
+
+        <div class="phase-row"><span>restoring</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 16%;"></div></div><span>59.5s</span></div>
+        <div class="phase-row"><span></span><div class="phase-bar-wrap"><div class="phase-bar after" style="width: 5.5%;"></div></div><span class="num-good">20.5s &nbsp;(−65%)</span></div>
+
+        <div class="phase-row"><span>building</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 36.2%;"></div></div><span>134.5s</span></div>
+        <div class="phase-row"><span></span><div class="phase-bar-wrap"><div class="phase-bar after" style="width: 31.3%;"></div></div><span class="num-good">116.2s &nbsp;(−14%)</span></div>
+
+        <div class="phase-row"><span style="font-weight: 700;">exporting</span><div class="phase-bar-wrap"><div class="phase-bar" style="width: 100%;"></div></div><span style="font-weight: 700;">371.0s</span></div>
+        <div class="phase-row"><span></span><div class="phase-bar-wrap"><div class="phase-bar after" style="width: 63.4%;"></div></div><span class="num-good" style="font-weight: 700;">235.2s &nbsp;(−37%)</span></div>
+      </div>
+      <p class="footnote">Restoring dropped because the cache image is 84% smaller → less to pull + untar. Export dropped because there's less data to tar+gzip+hash.</p>
+    </section>
+
+    <!-- Slide 11: Fleet-wide impact -->
+    <section data-transition="slide">
+      <h2>Result #3 — fleet-wide impact</h2>
+      <p>Top 5 apps per env, builds <strong>before</strong> vs <strong>after</strong> 2026-05-11 14:00 UTC:</p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em; margin-top: 0.3em;">
+        <div>
+          <h3 style="font-size: 0.75em;">Staging</h3>
+          <table style="font-size: 0.45em;">
+            <tr><th>App</th><th>Before</th><th>After</th><th>Δ</th></tr>
+            <tr><td>neeto-cal-web</td><td>937s</td><td>487s</td><td class="num-good">−48%</td></tr>
+            <tr><td>neeto-desk-web</td><td>865s</td><td>454s</td><td class="num-good">−48%</td></tr>
+            <tr><td>neeto-chat-web</td><td>899s</td><td>536s</td><td class="num-good">−40%</td></tr>
+            <tr><td>neeto-git-web</td><td>752s</td><td>463s</td><td class="num-good">−38%</td></tr>
+            <tr><td>neeto-planner-web</td><td>728s</td><td>468s</td><td class="num-good">−36%</td></tr>
+          </table>
+        </div>
+        <div>
+          <h3 style="font-size: 0.75em;">Production</h3>
+          <table style="font-size: 0.45em;">
+            <tr><th>App</th><th>Before</th><th>After</th><th>Δ</th></tr>
+            <tr><td>neeto-git-web</td><td>710s</td><td>442s</td><td class="num-good">−38%</td></tr>
+            <tr><td>neeto-engage-web</td><td>752s</td><td>514s</td><td class="num-good">−32%</td></tr>
+            <tr><td>neeto-pay-web</td><td>741s</td><td>521s</td><td class="num-good">−30%</td></tr>
+            <tr><td>neeto-tower-web</td><td>691s</td><td>492s</td><td class="num-good">−29%</td></tr>
+            <tr><td>neeto-deploy-web</td><td>841s</td><td>614s</td><td class="num-good">−27%</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="stat-grid" style="margin-top: 0.6em;">
+        <div class="stat-card fragment fade-up">
+          <div class="label">Staging median</div>
+          <div class="val" style="font-size: 1em;"><span class="num-good">−41%</span></div>
+        </div>
+        <div class="stat-card fragment fade-up">
+          <div class="label">Production median</div>
+          <div class="val" style="font-size: 1em;"><span class="num-good">−27%</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 12: Image size reduction -->
+    <section data-transition="zoom">
+      <h2>Result #4 — production image sizes</h2>
+      <p>3 production apps audited (had bloated 2.5+ GB launch-gems from dev/test gems):</p>
+      <div class="chart-wrap small"><canvas id="appSizeChart"></canvas></div>
+      <p class="fragment fade-up" style="margin-top: 0.5em; text-align: center;">
+        After deleting <code>:latest</code> + <code>:cache</code> and forcing one cold rebuild: combined size <span class="num-bad">8,315 MB</span> → <span class="num-good">2,541 MB</span> (<strong>−5.8 GB / −69%</strong>).
+      </p>
+    </section>
+
+    <!-- Slide 13: Workstreams shipped -->
+    <section data-transition="slide">
+      <h2>What we actually shipped</h2>
+      <div style="display: grid; grid-template-columns: 1fr; gap: 0.3em; font-size: 0.55em; line-height: 1.4;">
+        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>Per-phase instrumentation</strong> — <code>[Build][phase=…][duration_ms=…]</code> log lines, foundation for everything else</div>
+        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong><code>--previous-image</code> launch reuse</strong> — exporter references existing app-image blobs by digest</div>
+        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>lifecycle:0.2</strong> — fixed missing <code>return</code> in <code>addOrReuseCacheLayer</code> (duplicate manifest entries bug)</div>
+        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>lifecycle:0.3</strong> — 6 SBOM placeholder files, eliminates exporter warnings</div>
+        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>slug-compiler PR #316</strong> — removed no-op <code>--trust-builder</code>, bumped lifecycle ref to 0.3</div>
+        <div class="fragment fade-up" style="border-left: 3px solid var(--accent2); padding-left: 0.5em;"><span class="pill shipped">FLAGSHIP</span> <strong>bundle-install:0.9.0</strong> — env-aware <code>--without</code> on both build and launch layers. THE big lever.</div>
+        <div class="fragment fade-up"><span class="pill shipped">SHIPPED</span> <strong>ruby:0.47.21 composite</strong> — references bundle-install:0.9.0, propagates fix to every Ruby app</div>
+        <div class="fragment fade-up"><span class="pill shipped">OPS</span> <strong>Fleet-wide tag clear</strong> — 250 :cache + 118 prod/staging :latest deleted, forcing fresh clean rebuilds</div>
+      </div>
+    </section>
+
+    <!-- Slide 14: Honest evaluation -->
+    <section data-transition="slide">
+      <h2>What we evaluated and skipped (honestly)</h2>
+      <table style="font-size: 0.6em;">
+        <tr><th>Option</th><th>Original estimate</th><th>Honest estimate</th><th>Verdict</th></tr>
+        <tr><td>zstd compression</td><td>30–50 s</td><td>8–15 s</td><td><span class="pill skipped">SKIP</span> Lifecycle doesn't support it, code change required</td></tr>
+        <tr><td>Parallel layer export</td><td>"cut in half"</td><td>15–25 s</td><td><span class="pill skipped">SKIP</span> Diminishing returns post-fix, race-condition risk</td></tr>
+        <tr><td>Bigger build pods (3→6 CPU)</td><td>30–60 s</td><td>&lt;5 s</td><td><span class="pill skipped">SKIP</span> gzip is single-threaded — no win</td></tr>
+        <tr><td>Reduce launch-layer count</td><td>"modest"</td><td>~3 s/layer</td><td><span class="pill skipped">SKIP</span> UX risk for tiny gain</td></tr>
+        <tr><td>PVC local layer cache</td><td>200–300 s</td><td>~40 s</td><td><span class="pill skipped">SKIP</span> 5-7 days of ops work for 40 s</td></tr>
+        <tr><td>arm-builds image pre-pull</td><td>30–60 s saved</td><td>n/a</td><td><span class="pill wrong">WRONG</span> Pack uses podman in-pod, not containerd — node-level pre-pull invisible</td></tr>
+      </table>
+      <p class="fragment fade-up" style="margin-top: 1em; font-size: 0.8em;">
+        The bundle-install fix already extracted the easy multi-minute wins.
+        Every remaining option had diminishing returns relative to its implementation cost.
+        <strong>Knowing when to stop is part of the work.</strong>
+      </p>
+    </section>
+
+    <!-- Slide 15: Artifacts -->
+    <section data-transition="slide">
+      <h2>Artifacts shipped to ECR</h2>
+      <pre style="font-size: 0.55em;"><code>348674388966.dkr.ecr.us-east-1.amazonaws.com/
+├── neeto-deploy/paketo/lifecycle:0.2          (cache duplicate-layer fix)
+│   ├── 0.2-amd64    sha256:8d6cd7…
+│   └── 0.2-arm64    sha256:d79c82…
+│
+├── neeto-deploy/paketo/lifecycle:0.3          (SBOM placeholder files)
+│   └── multi-arch   sha256:17637a…
+│
+├── neeto-deploy/paketo/buildpack/bundle-install:0.9.0    ← FLAGSHIP
+│   ├── 0.9.0-amd64
+│   ├── 0.9.0-arm64
+│   └── multi-arch   sha256:736355…
+│
+└── neeto-deploy/paketo/buildpack/ruby:0.47.21
+    └── multi-arch   sha256:fffc12…   (composite — pulls bundle-install:0.9.0)</code></pre>
+      <p style="font-size: 0.7em; margin-top: 1em;">
+        Plus tracking issue: <code>neetozone/neeto-deploy-web#7146</code><br>
+        Plus PR: <code>neetozone/neeto-deploy-paketo-bundle-install-buildpack#12</code>
+      </p>
+    </section>
+
+    <!-- Slide 16: Numbers card -->
+    <section data-transition="zoom" data-background-color="#0a0f1c">
+      <h2 style="text-align: center;">Bottom line</h2>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em; margin-top: 1em; text-align: center;">
+        <div class="fragment fade-up">
+          <div class="big-num" style="font-size: 2.6em;">29<span class="unit">%</span></div>
+          <div style="margin-top: 0.4em; font-size: 0.55em; color: #9ca3af;">faster builds</div>
+        </div>
+        <div class="fragment fade-up">
+          <div class="big-num" style="font-size: 2.6em;">84<span class="unit">%</span></div>
+          <div style="margin-top: 0.4em; font-size: 0.55em; color: #9ca3af;">smaller cache</div>
+        </div>
+        <div class="fragment fade-up">
+          <div class="big-num" style="font-size: 2.6em;">95<span class="unit">%</span></div>
+          <div style="margin-top: 0.4em; font-size: 0.55em; color: #9ca3af;">smaller build-gems layer</div>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em; margin-top: 1.2em; text-align: center;">
+        <div class="fragment fade-up">
+          <div class="big-num" style="color: var(--accent2); font-size: 2.6em;">8<span class="unit"> apps</span></div>
+          <div style="margin-top: 0.4em; font-size: 0.55em; color: #9ca3af;">7 PRs merged, 1 open</div>
+        </div>
+        <div class="fragment fade-up">
+          <div class="big-num" style="color: var(--accent2); font-size: 2.6em;">368<span class="unit"> tags</span></div>
+          <div style="margin-top: 0.4em; font-size: 0.55em; color: #9ca3af;">cleared fleet-wide</div>
+        </div>
+        <div class="fragment fade-up">
+          <div class="big-num" style="color: var(--accent2); font-size: 2.6em;">~6<span class="unit"> GB</span></div>
+          <div style="margin-top: 0.4em; font-size: 0.55em; color: #9ca3af;">freed from just 3 apps</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 17: Thank you -->
+    <section data-transition="fade" style="text-align: center;">
+      <h1 style="font-size: 3em;">Thanks 🙌</h1>
+      <p style="font-size: 0.9em; color: var(--accent); margin-top: 0.8em;">Questions?</p>
+      <p style="font-size: 0.55em; color: #9ca3af; margin-top: 2em;">
+        Detailed report: <code>pack-build-optimization-results.md</code><br>
+        Gist: <code>gist.github.com/vishal24367/e06ad01da4c455216e9833920135094a</code>
+      </p>
+    </section>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+  Reveal.initialize({
+    hash: true,
+    width: 1280,
+    height: 720,
+    margin: 0.04,
+    minScale: 0.2,
+    maxScale: 2.0,
+    transition: 'slide',
+    transitionSpeed: 'default',
+    backgroundTransition: 'fade',
+    controls: true,
+    progress: true,
+    center: false,
+    plugins: [ RevealHighlight ]
+  });
+
+  // Render charts when each slide becomes active
+  let cacheChartDone = false, appSizeChartDone = false;
+
+  Reveal.on('slidechanged', (event) => {
+    const slide = event.currentSlide;
+
+    // Cache reduction chart
+    const cacheCanvas = slide.querySelector('#cacheChart');
+    if (cacheCanvas && !cacheChartDone) {
+      cacheChartDone = true;
+      new Chart(cacheCanvas, {
+        type: 'bar',
+        data: {
+          labels: ['L0','L1','L2','L3','L4','L5 (build-gems)','L6','L7','L8'],
+          datasets: [
+            { label: 'Before (MB)', data: [63.2, 1.5, 173.8, 97.2, 0.5, 2651.7, 65.8, 2.6, 1.6],
+              backgroundColor: '#ef4444' },
+            { label: 'After (MB)', data: [63.2, 1.5, 173.8, 97.2, 0.5, 124.6, 65.8, 2.6, 1.6],
+              backgroundColor: '#7df9c0' }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 1500, easing: 'easeOutQuart' },
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: '#1f2937' }, title: { display: true, text: 'MB', color: '#9ca3af', font: { size: 10 } } },
+            x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: '#1f2937' } }
+          }
+        }
+      });
+    }
+
+    // App size chart
+    const appCanvas = slide.querySelector('#appSizeChart');
+    if (appCanvas && !appSizeChartDone) {
+      appSizeChartDone = true;
+      new Chart(appCanvas, {
+        type: 'bar',
+        data: {
+          labels: ['neeto-cal-web-prod', 'neeto-record-web-prod', 'neeto-form-web-prod'],
+          datasets: [
+            { label: 'Before', data: [2829, 2801, 2685], backgroundColor: '#ef4444' },
+            { label: 'After',  data: [870,  752,  919 ], backgroundColor: '#7df9c0' }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 1500, easing: 'easeOutQuart' },
+          indexAxis: 'y',
+          plugins: { legend: { labels: { color: '#d1d5db', font: { size: 11 } } } },
+          scales: {
+            x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: '#1f2937' }, title: { display: true, text: 'MB', color: '#9ca3af', font: { size: 10 } } },
+            y: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: '#1f2937' } }
+          }
+        }
+      });
+    }
+  });
+</script>
+</body>
+</html>
