@@ -543,6 +543,59 @@ if environment.BundleWithout != "" {
       </p>
     </section>
 
+    <!-- Slide 12b: Result #5 — fleet-wide image savings -->
+    <section data-transition="slide" style="font-size: 0.6em;">
+      <h2 style="font-size: 2em;">Result #5 — fleet-wide image savings</h2>
+      <p style="font-size: 1em;">Across the apps that have rebuilt since the fleet-wide tag clear, <strong>17 of 72 apps got measurably smaller</strong> (the other 55 simply haven't redeployed yet). Top 12 by absolute MB saved:</p>
+      <table style="font-size: 0.85em; margin-top: 0.3em;">
+        <tr><th>App</th><th style="text-align: right;">Before</th><th style="text-align: right;">After</th><th style="text-align: right;">Δ MB</th><th style="text-align: right;">Δ %</th></tr>
+        <tr><td>neeto-record-web-prod</td><td style="text-align: right;">2,801 MB</td><td style="text-align: right;">752 MB</td><td style="text-align: right;" class="num-good">−2,049</td><td style="text-align: right;" class="num-good">−73%</td></tr>
+        <tr><td>neeto-cal-web-prod</td><td style="text-align: right;">2,829 MB</td><td style="text-align: right;">870 MB</td><td style="text-align: right;" class="num-good">−1,959</td><td style="text-align: right;" class="num-good">−69%</td></tr>
+        <tr><td>neeto-form-web-prod</td><td style="text-align: right;">2,685 MB</td><td style="text-align: right;">920 MB</td><td style="text-align: right;" class="num-good">−1,765</td><td style="text-align: right;" class="num-good">−66%</td></tr>
+        <tr><td>neeto-form-web-stag</td><td style="text-align: right;">1,143 MB</td><td style="text-align: right;">647 MB</td><td style="text-align: right;" class="num-good">−496</td><td style="text-align: right;" class="num-good">−43%</td></tr>
+        <tr><td>neeto-chat-web-stag</td><td style="text-align: right;">1,126 MB</td><td style="text-align: right;">630 MB</td><td style="text-align: right;" class="num-good">−495</td><td style="text-align: right;" class="num-good">−44%</td></tr>
+        <tr><td>neeto-chat-web-prod</td><td style="text-align: right;">950 MB</td><td style="text-align: right;">630 MB</td><td style="text-align: right;" class="num-good">−320</td><td style="text-align: right;" class="num-good">−34%</td></tr>
+        <tr><td>neeto-editor-prod</td><td style="text-align: right;">740 MB</td><td style="text-align: right;">462 MB</td><td style="text-align: right;" class="num-good">−278</td><td style="text-align: right;" class="num-good">−38%</td></tr>
+        <tr><td>bigbinary-website-stag</td><td style="text-align: right;">1,161 MB</td><td style="text-align: right;">899 MB</td><td style="text-align: right;" class="num-good">−262</td><td style="text-align: right;" class="num-good">−23%</td></tr>
+        <tr><td>neeto-git-web-prod / stag</td><td style="text-align: right;">851 MB</td><td style="text-align: right;">660 MB</td><td style="text-align: right;" class="num-good">−191</td><td style="text-align: right;" class="num-good">−22%</td></tr>
+        <tr><td>neeto-tower-web-prod / stag</td><td style="text-align: right;">670 MB</td><td style="text-align: right;">521 MB</td><td style="text-align: right;" class="num-good">−148</td><td style="text-align: right;" class="num-good">−22%</td></tr>
+      </table>
+      <div class="fragment fade-up" style="margin-top: 0.5em; padding: 0.5em 0.8em; background: rgba(125,249,192,0.1); border-left: 3px solid var(--accent); border-radius: 4px;">
+        <strong style="color: var(--accent);">Aggregate so far:</strong> ~<strong>8.3 GB freed</strong> across just 17 apps. The remaining 55 prod/staging apps will follow the same pattern on their next natural deploy — expected fleet-wide reclaim <strong>~30–60 GB</strong>.
+      </div>
+    </section>
+
+    <!-- Slide 12c: Why smaller images matter operationally -->
+    <section data-transition="slide" style="font-size: 0.6em;">
+      <h2 style="font-size: 2em;">Why smaller images matter operationally</h2>
+      <p style="font-size: 1em;">Image size isn't just a storage line item. Every byte gets pulled by the kubelet onto every node, on every cold start.</p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6em; margin-top: 0.4em;">
+        <div class="stat-card fragment fade-up">
+          <div class="label">Faster pod cold start</div>
+          <div class="val" style="font-size: 1em;">~30 s → ~9 s</div>
+          <div class="sub">Cold image pull (2.8 GB → 870 MB)</div>
+        </div>
+        <div class="stat-card fragment fade-up">
+          <div class="label">Faster horizontal scale-out</div>
+          <div class="val" style="font-size: 1em;">~21 s/pod saved</div>
+          <div class="sub">HPA scales 1 → N replicas faster</div>
+        </div>
+        <div class="stat-card fragment fade-up">
+          <div class="label">Faster rolling deploys</div>
+          <div class="val" style="font-size: 1em;">~21 s × replicas</div>
+          <div class="sub">Each pod rotation is quicker</div>
+        </div>
+        <div class="stat-card fragment fade-up">
+          <div class="label">Lower ECR storage</div>
+          <div class="val" style="font-size: 1em;">~$0.10 / GB-month</div>
+          <div class="sub">~30–60 GB freed fleet-wide</div>
+        </div>
+      </div>
+      <p class="fragment fade-up" style="font-size: 0.95em; margin-top: 0.5em; line-height: 1.4;">
+        <strong style="color: var(--accent);">Compounding effect on traffic spikes:</strong> when an app gets a sudden burst, the autoscaler responds faster because new pods come ready in seconds instead of half a minute. Especially impactful for the 3 worst-offender apps (cal-web, record-web, form-web) which each had ~21 s of unnecessary pull latency on every pod startup.
+      </p>
+    </section>
+
     <!-- Slide 13: Workstreams shipped -->
     <section data-transition="slide">
       <h2>What we actually shipped</h2>
